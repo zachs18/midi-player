@@ -1,7 +1,5 @@
 /***
-	This file is adapted from PulseAudio's pacat-simple.c.
-	
-	This file is NOT part of PulseAudio itself.
+	This file is part of PulseAudio.
 
 	PulseAudio is free software; you can redistribute it and/or modify
 	it under the terms of the GNU Lesser General Public License as published
@@ -27,7 +25,6 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <time.h>
 
 #include <math.h>
 #include <poll.h>
@@ -63,29 +60,6 @@ static struct spectrum sine = {
 	(double[]){1.},
 	1.,
 };
-static struct spectrum test = {
-	3,
-	(double[]){0, 1., 0.6},
-	1.6,
-};
-
-static struct spectrum saw = {
-	7,
-	(double[]){1., -1/2., 1/3., -1/4., 1/5., -1/6., 1/7.},
-	1. + 1/2. + 1/3. + 1/4. + 1/5. + 1/6. + 1/7.,
-};
-
-static struct spectrum square = {
-	7,
-	(double[]){1., 0., 1/3., 0., 1/5., 0., 1/7.},
-	1. + 1/3. + 1/5. + 1/7.,
-};
-
-static struct spectrum triangle = {
-	7,
-	(double[]){1., 0., -1/9., 0., 1/25., 0., -1/49.},
-	1. + 1/9. + 1/25. + 1/49.,
-};
 
 static struct spectrum flute = {
 	5,
@@ -106,18 +80,16 @@ int main(int argc, char*argv[]) {
 	struct pollfd pollfd = {STDIN_FILENO, POLLIN, 0};
 
 	pa_simple *s = NULL;
-	int prog_ret = 1;
+	int ret = 1;
 	int error;
-	int notes[CHANNEL_COUNT][NOTE_COUNT] = {0};
-	double freqs[CHANNEL_COUNT][NOTE_COUNT] = {0.};
+//	int notes[CHANNEL_COUNT][NOTE_COUNT] = {0};
+//	double freqs[CHANNEL_COUNT][NOTE_COUNT] = {0.};
+	int freqs[CHANNEL_COUNT][NOTE_COUNT] = {0.};
 	int amps[CHANNEL_COUNT][NOTE_COUNT] = {0};
 	struct spectrum *instruments = calloc(CHANNEL_COUNT, sizeof(struct spectrum));
-	for (int i = 0; i < CHANNEL_COUNT; ++i) instruments[i] = STARTING_INSTRUMENT;
-	//instruments[0] = violin;
+	for (int i = 0; i < CHANNEL_COUNT; ++i) instruments[i] = violin;
+	instruments[0] = flute;
 	
-
-	time_t start_time = time(NULL);
-	signal(SIGINT, SIG_IGN); // so the python script wil catch it
 	
 	//int sample_count; //  = RATE / freq;
 
@@ -125,6 +97,9 @@ int main(int argc, char*argv[]) {
 	//int sample_count = 2*RATE / freq;
 	double sample_dt = 1 / (double)RATE; // delta time
 	int sample_index = 0;
+	fprintf(stderr, "%d: ", violin.count);
+	for (int i = 0; i < violin.count; ++i) fprintf(stderr, "%f ", violin.amps[i]);
+	fprintf(stderr, "\n");
 
 	/* Create a new playback stream */
 	if (!(s = pa_simple_new(NULL, argv[0], PA_STREAM_PLAYBACK, NULL, "playback", &ss, NULL, NULL, &error))) {
@@ -140,15 +115,12 @@ int main(int argc, char*argv[]) {
 		poll(&pollfd, 1, 1);
 		//if (pollfd.revents) fprintf(stderr, "revents: 0x%x (in: 0x%x)\n", pollfd.revents, POLLIN);
 		while (pollfd.revents & (POLLIN | POLLHUP)) {
-			//fprintf(stderr, "POLLIN\n\n");
+			//fprintf(stderr, "POLLIN\n");
 			pollfd.revents = 0;
 			unsigned char msg[8]; // note_on: 3 bytes, note_off: 3 bytes
 			int note, vel, channel;
 			int ret = read(STDIN_FILENO, msg, 1);
-			if (ret == 0) { // eof
-				prog_ret = 0;
-				goto finish;
-			}
+			if (ret == 0) goto finish; // eof
 			if ((msg[0]&MSG_MASK) == NOTE_ON) {
 				//fprintf(stderr, "NOTE_ON\n");
 				channel = msg[0] & CHANNEL_MASK;
@@ -156,18 +128,17 @@ int main(int argc, char*argv[]) {
 				if (ret != 2) goto finish;
 				note = msg[0]; // note number
 				vel = msg[1]; // velocity
+				int freq = 440. * pow(2, (note - 69) / 12.);
 				for(int i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d\n", __LINE__, i, freqs[i], amps[i]);
-					if (vel == 0 && notes[channel][i] == note) {
-						notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
+					if (vel == 0 && freqs[channel][i] == freq) {
+						freqs[channel][i] = amps[channel][i] = 0;
 						break;
 					}
-					else if (vel > 0 && !notes[channel][i]) {
-						//double freq = 440. * pow(2, (note - 69) / 12.);
-						freqs[channel][i] = 440. * pow(2, (note - 69) / 12.);
-						notes[channel][i] = note;
-						amps[channel][i] = vel * (8192 / 0xff);
+					else if (vel > 0 && !freqs[channel][i]) {
+						freqs[channel][i] = freq;
 						//fprintf(stderr, "%d (%d) on %d\n", note, freqs[i], i);
+						amps[channel][i] = vel * (8192 / 0xff);
 						break;
 					}
 				}
@@ -178,12 +149,12 @@ int main(int argc, char*argv[]) {
 				ret = read(STDIN_FILENO, msg, 2);
 				if (ret != 2) goto finish;
 				int note = msg[0]; // note number
-				//int freq = 440. * pow(2, (note - 69) / 12.);
+				int freq = 440. * pow(2, (note - 69) / 12.);
 				for(int i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d (trying to turn off %d)\n", __LINE__, i, freqs[i], amps[i], freq);
-					if (notes[channel][i] == note) {
+					if (freqs[channel][i] == freq) {
 						//fprintf(stderr, "%d (%d) off %d\n", note, freq, i);
-						notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
+						freqs[channel][i] = amps[channel][i] = 0;
 						break;
 					}
 				}
@@ -232,31 +203,29 @@ int main(int argc, char*argv[]) {
 		}
 		
 		// print notes
-//		fprintf(stderr, "time: %lld\n", (long long int) time(NULL) - start_time);
-		fprintf(stderr, "chnls:\x1b[0K");
+		fprintf(stderr, "chnls:");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				if (amps[i][j])
 					fprintf(stderr, " (%2d,%1d)\x1b[0K", i, j);
 		fprintf(stderr, "\n");
-		fprintf(stderr, "freqs:\x1b[0K");
+		fprintf(stderr, "freqs:");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				if (amps[i][j])
-					fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.0f\x1b[0K", freqs[i][j]);
+					fprintf(stderr, " %6d\x1b[0K", freqs[i][j]);
 		fprintf(stderr, "\n");
-		fprintf(stderr, "amps: \x1b[0K");
+		fprintf(stderr, "amps: ");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				if (amps[i][j])
 					fprintf(stderr, " %6d\x1b[0K", amps[i][j]);
 		fprintf(stderr, "\n");
-		fprintf(stderr, "amps: \x1b[0K");
+		fprintf(stderr, "amps: ");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				if (amps[i][j])
 					fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
-//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
 		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
 		fflush(stderr);
 		
@@ -275,17 +244,12 @@ int main(int argc, char*argv[]) {
 		goto finish;
 	}
 
-	prog_ret = 0;
+	ret = 0;
 
 finish:
-	fprintf(stderr, "\r\x1b[0K\n");
-	fprintf(stderr, "\r\x1b[0K\n");
-	fprintf(stderr, "\r\x1b[0K\n");
-	fprintf(stderr, "\r\x1b[0K\n");
-	fprintf(stderr, "\r\x1b[0K\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
-	fprintf(stderr, "\r\x1b[0K");
+
 	if (s)
 		pa_simple_free(s);
 
-	return prog_ret;
+	return ret;
 }

@@ -27,7 +27,6 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <time.h>
 
 #include <math.h>
 #include <poll.h>
@@ -62,11 +61,6 @@ static struct spectrum sine = {
 	1,
 	(double[]){1.},
 	1.,
-};
-static struct spectrum test = {
-	3,
-	(double[]){0, 1., 0.6},
-	1.6,
 };
 
 static struct spectrum saw = {
@@ -115,8 +109,6 @@ int main(int argc, char*argv[]) {
 	for (int i = 0; i < CHANNEL_COUNT; ++i) instruments[i] = STARTING_INSTRUMENT;
 	//instruments[0] = violin;
 	
-
-	time_t start_time = time(NULL);
 	signal(SIGINT, SIG_IGN); // so the python script wil catch it
 	
 	//int sample_count; //  = RATE / freq;
@@ -232,7 +224,6 @@ int main(int argc, char*argv[]) {
 		}
 		
 		// print notes
-//		fprintf(stderr, "time: %lld\n", (long long int) time(NULL) - start_time);
 		fprintf(stderr, "chnls:\x1b[0K");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
@@ -256,7 +247,6 @@ int main(int argc, char*argv[]) {
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				if (amps[i][j])
 					fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
-//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
 		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
 		fflush(stderr);
 		
@@ -282,8 +272,6 @@ finish:
 	fprintf(stderr, "\r\x1b[0K\n");
 	fprintf(stderr, "\r\x1b[0K\n");
 	fprintf(stderr, "\r\x1b[0K\n");
-	fprintf(stderr, "\r\x1b[0K\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
-	fprintf(stderr, "\r\x1b[0K");
 	if (s)
 		pa_simple_free(s);
 
