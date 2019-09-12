@@ -23,6 +23,8 @@ if __name__ == "__main__":
 	if len(sys.argv) > 1:
 		for i in range(int(sys.argv[1])):
 			next(pi)
-
-	for (a, b) in zip(pi, pi):
-		sys.stdout.buffer.write(bytes([10*a+b]))
+	try:
+		for (a, b) in zip(pi, pi):
+			sys.stdout.buffer.write(bytes([10*a+b]))
+	except (BrokenPipeError, KeyboardInterrupt):
+		pass
