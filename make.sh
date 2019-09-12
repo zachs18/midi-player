@@ -11,3 +11,4 @@ gcc midi_creepy.c -lm -lpulse -lpulse-simple -DSTARTING_INSTRUMENT=violin -o cre
 gcc midi_creepy.c -lm -lpulse -lpulse-simple -DSTARTING_INSTRUMENT=violin -DCREEPDOWN -o creepy_midi_violin_down
 
 gcc `pkg-config --cflags gtk+-3.0` midi_keyboard.c `pkg-config --libs gtk+-3.0` -o midi_keyboard
+gcc `pkg-config --cflags gtk+-3.0` midi_keyboard_loop.c `pkg-config --libs gtk+-3.0` -o midi_keyboard_loop

@@ -101,7 +101,7 @@ int main(int argc, char*argv[]) {
 		.rate = RATE,
 		.channels = 1
 	};
-	FILE *temp = fopen("temp.raw", "wb");
+	//FILE *temp = fopen("temp.raw", "wb");
 	
 	struct pollfd pollfd = {STDIN_FILENO, POLLIN, 0};
 
@@ -243,7 +243,7 @@ int main(int argc, char*argv[]) {
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				if (amps[i][j])
-					fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.0f\x1b[0K", freqs[i][j]);
+					fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.1f\x1b[0K", freqs[i][j]);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "amps: \x1b[0K");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
@@ -261,8 +261,8 @@ int main(int argc, char*argv[]) {
 		fflush(stderr);
 		
 		/* ... and play it */
-		fwrite(buf, 2, BUFSIZE, temp);
-		fflush(temp);
+		//fwrite(buf, 2, BUFSIZE, temp);
+		//fflush(temp);
 		if (pa_simple_write(s, buf, (size_t) buf_bytes, &error) < 0) {
 			fprintf(stderr, __FILE__": pa_simple_write() failed: %s\n", pa_strerror(error));
 			goto finish;

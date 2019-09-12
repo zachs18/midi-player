@@ -103,7 +103,7 @@ int main(int argc, char*argv[]) {
 		.rate = RATE,
 		.channels = 1
 	};
-	FILE *temp = fopen("temp.raw", "wb");
+	//FILE *temp = fopen("temp.raw", "wb");
 	
 	struct pollfd pollfd = {STDIN_FILENO, POLLIN, 0};
 
@@ -272,8 +272,8 @@ int main(int argc, char*argv[]) {
 		fflush(stderr);
 		
 		/* ... and play it */
-		fwrite(buf, 2, BUFSIZE, temp);
-		fflush(temp);
+		//fwrite(buf, 2, BUFSIZE, temp);
+		//fflush(temp);
 		if (pa_simple_write(s, buf, (size_t) buf_bytes, &error) < 0) {
 			fprintf(stderr, __FILE__": pa_simple_write() failed: %s\n", pa_strerror(error));
 			goto finish;
