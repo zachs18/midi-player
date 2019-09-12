@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 
 def continued_fraction(a, b, base=10):
