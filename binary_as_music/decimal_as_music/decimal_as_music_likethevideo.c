@@ -72,7 +72,7 @@ int note_midi_values[8] = {
 };
 */
 
-int note_midi_values[10] = {
+int note_midi_values[16] = {
 //	36, 38, 40,
 //	43, 45,
 	48, 50, 52,
@@ -80,15 +80,19 @@ int note_midi_values[10] = {
 	60, 62, 64,
 	67, 69,
 //	72,
+
+	0,0,0,0,0,0,
 };
 
 
-int lengths[10] = {
+int lengths[16] = {
 	8, 8,
 	6, 6,
 	4, 4,
 	2, 2,
 	1, 1,
+
+	1,1,1,1,1,1,
 };
 
 void *smalloc(size_t size) {
@@ -232,8 +236,8 @@ void *worker(void *info_) {
 
 
 			if (c != EOF) {
-				values[values[0]+1] = (c / 10) % 10;
-				values[values[0]+2] = c % 10;
+				values[values[0]+1] = (c / 16) % 16; // BCD
+				values[values[0]+2] = c % 16;
 				fprintf(stderr, "Got c == %d, values[0] = %d, values[1] = %d, values[2] = %d, values[3] = %d, values[4] = %d\n", c, values[0], values[1], values[2], values[3], values[4]);
 			}
 			else {
@@ -244,12 +248,12 @@ void *worker(void *info_) {
 			values[0] += 2;
 		}
 
-		int note = values[1], length = values[2], volume = values[3] % 3;
+		int note = values[1], length = values[2], volume = values[3];
 
 		pthread_mutex_lock(outmutex);
 		putchar(channel); // MIDI Note on Channel 1
 		putchar(last_note_value = note_midi_values[note]); // prev note
-		putchar(100+20*volume); // velocity on
+		putchar(100+8*volume); // velocity on
 		fflush(stdout);
 		pthread_mutex_unlock(outmutex);
 

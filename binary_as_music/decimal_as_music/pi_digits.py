@@ -25,6 +25,6 @@ if __name__ == "__main__":
 			next(pi)
 	try:
 		for (a, b) in zip(pi, pi):
-			sys.stdout.buffer.write(bytes([10*a+b]))
+			sys.stdout.buffer.write(bytes([16*a+b]))
 	except (BrokenPipeError, KeyboardInterrupt):
 		pass
