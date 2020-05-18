@@ -35,6 +35,8 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 
+#include "percussion.h"
+
 #define BUFSIZE 128
 #define RATE 44100
 #define AMPLITUDE 32000
@@ -111,6 +113,7 @@ int main(int argc, char*argv[]) {
 	int notes[CHANNEL_COUNT][NOTE_COUNT] = {0};
 	double freqs[CHANNEL_COUNT][NOTE_COUNT] = {0.};
 	int amps[CHANNEL_COUNT][NOTE_COUNT] = {0};
+	double *percussion_sample_positions[NOTE_COUNT] = {0}; // channel 9 percussion samples
 	struct spectrum *instruments = calloc(CHANNEL_COUNT, sizeof(struct spectrum));
 	for (int i = 0; i < CHANNEL_COUNT; ++i) instruments[i] = STARTING_INSTRUMENT;
 	//instruments[0] = violin;
@@ -163,11 +166,18 @@ int main(int argc, char*argv[]) {
 						break;
 					}
 					else if (vel > 0 && !notes[channel][i]) {
-						//double freq = 440. * pow(2, (note - 69) / 12.);
-						freqs[channel][i] = 440. * pow(2, (note - 69) / 12.);
-						notes[channel][i] = note;
-						amps[channel][i] = vel * (8192 / 0xff);
-						//fprintf(stderr, "%d (%d) on %d\n", note, freqs[i], i);
+						if (channel == 9) { // percussion
+							freqs[channel][i] = notes[channel][i] = note;
+							amps[channel][i] = vel * (8192 / 0xff);
+							percussion_sample_positions[i] = percussions[note];
+						}
+						else {
+							//double freq = 440. * pow(2, (note - 69) / 12.);
+							freqs[channel][i] = 440. * pow(2, (note - 69) / 12.);
+							notes[channel][i] = note;
+							amps[channel][i] = vel * (8192 / 0xff);
+							//fprintf(stderr, "%d (%d) on %d\n", note, freqs[i], i);
+						}
 						break;
 					}
 				}
@@ -213,16 +223,31 @@ int main(int argc, char*argv[]) {
 		for (int i = 0; i < BUFSIZE; ++i, ++sample_index) {
 			double wav = 0;
 			for (int channel = 0; channel < CHANNEL_COUNT; ++channel) {
-				for (int j = 0; j < NOTE_COUNT; ++j) {
-					if (!amps[channel][j]) continue;
-					double wava = 0;
-					for (int k = 0; k < instruments[channel].count; ++k) {
-						wava += instruments[channel].amps[k] * sin((k+1)*2.*M_PI*sample_dt*sample_index*freqs[channel][j]);
+				if (channel != 9) { // not percussion
+					for (int j = 0; j < NOTE_COUNT; ++j) {
+						if (!amps[channel][j]) continue;
+						double wava = 0;
+						for (int k = 0; k < instruments[channel].count; ++k) {
+							wava += instruments[channel].amps[k] * sin((k+1)*2.*M_PI*sample_dt*sample_index*freqs[channel][j]);
+						}
+						wav += wava * amps[channel][j] / instruments[channel].fullamp;
+						//wav += amps[j] * sin(4.*M_PI*sample_dt*sample_index*freqs[j]) / 3.;
+						//wav += amps[j] * sin(6.*M_PI*sample_dt*sample_index*freqs[j]) / 6.;
+						//wav += amps[j] * sin(8.*M_PI*sample_dt*sample_index*freqs[j]) / 10.;
 					}
-					wav += wava * amps[channel][j] / instruments[channel].fullamp;
-					//wav += amps[j] * sin(4.*M_PI*sample_dt*sample_index*freqs[j]) / 3.;
-					//wav += amps[j] * sin(6.*M_PI*sample_dt*sample_index*freqs[j]) / 6.;
-					//wav += amps[j] * sin(8.*M_PI*sample_dt*sample_index*freqs[j]) / 10.;
+				}
+				else { // percussion
+					for (int j = 0; j < NOTE_COUNT; ++j) {
+						if (!percussion_sample_positions[j] || !amps[channel][j]) continue;
+//							if (!percussion_sample_positions[j]) continue;
+//						}
+						wav += *percussion_sample_positions[j]++ * amps[channel][j];
+						if (*percussion_sample_positions[j] > 1.0) { // greater than 1.0 sample indicates end of wave
+							percussion_sample_positions[j] = NULL;
+							amps[channel][j] = 0;
+						}
+					}
+					// idk
 				}
 			}
 			if (ampsum > 32767)
