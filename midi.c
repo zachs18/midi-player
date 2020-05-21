@@ -48,51 +48,80 @@
 #define NOTE_ON 0x90
 #define NOTE_OFF 0x80
 
+struct envelope {
+	int attack;
+	int decay;
+	double sustain;
+	int release;
+	// https://en.wikipedia.org/wiki/Envelope_(music)
+	// times are in 1/44100 second intervals
+	// attack is the time until full volume
+	// decay is the time from full volume until sustain volume
+	// sustain is the volume during sustain
+	// release is teh time from release to no volume
+};
+
+struct envelope default_envelope = 
+{
+	1,
+	22050,
+	0.5,
+	0,
+};
+
 struct spectrum {
 	int count;
 	double *amps;
 	double fullamp;
+	struct envelope envelope;
 };
 
 static struct spectrum violin = {
 	8,
 	(double[]){1., .6, .6, .7, .4, .2, .4, .1},
 	1. + .6 + .6 + .7 + .4 + .2 + .4 + .1,
+	default_envelope,
 };
 
 static struct spectrum sine = {
 	1,
 	(double[]){1.},
 	1.,
+	default_envelope,
 };
 static struct spectrum test = {
 	3,
 	(double[]){0, 1., 0.6},
 	1.6,
+	default_envelope,
 };
 
 static struct spectrum saw = {
 	7,
 	(double[]){1., -1/2., 1/3., -1/4., 1/5., -1/6., 1/7.},
 	1. + 1/2. + 1/3. + 1/4. + 1/5. + 1/6. + 1/7.,
+	default_envelope,
 };
 
 static struct spectrum square = {
 	7,
 	(double[]){1., 0., 1/3., 0., 1/5., 0., 1/7.},
 	1. + 1/3. + 1/5. + 1/7.,
+	default_envelope,
 };
 
 static struct spectrum triangle = {
 	7,
 	(double[]){1., 0., -1/9., 0., 1/25., 0., -1/49.},
 	1. + 1/9. + 1/25. + 1/49.,
+	default_envelope,
 };
 
 static struct spectrum flute = {
 	5,
 	(double[]){1., 1., .1, .2, .2},
 	1. + 1. + .1 + .2 + .2,
+	default_envelope,
 };
 
 int main(int argc, char*argv[]) {
@@ -113,6 +142,7 @@ int main(int argc, char*argv[]) {
 	int notes[CHANNEL_COUNT][NOTE_COUNT] = {0};
 	double freqs[CHANNEL_COUNT][NOTE_COUNT] = {0.};
 	int amps[CHANNEL_COUNT][NOTE_COUNT] = {0};
+	int sample_lengths[CHANNEL_COUNT][NOTE_COUNT] = {0}; // for envelope
 	double *percussion_sample_positions[NOTE_COUNT] = {0}; // channel 9 percussion samples
 	struct spectrum *instruments = calloc(CHANNEL_COUNT, sizeof(struct spectrum));
 	for (int i = 0; i < CHANNEL_COUNT; ++i) instruments[i] = STARTING_INSTRUMENT;
@@ -231,6 +261,7 @@ int main(int argc, char*argv[]) {
 							wava += instruments[channel].amps[k] * sin((k+1)*2.*M_PI*sample_dt*sample_index*freqs[channel][j]);
 						}
 						wav += wava * amps[channel][j] / instruments[channel].fullamp;
+						if (i%10 == 0) amps[channel][j] *= 0.9999999; // envelope
 						//wav += amps[j] * sin(4.*M_PI*sample_dt*sample_index*freqs[j]) / 3.;
 						//wav += amps[j] * sin(6.*M_PI*sample_dt*sample_index*freqs[j]) / 6.;
 						//wav += amps[j] * sin(8.*M_PI*sample_dt*sample_index*freqs[j]) / 10.;
