@@ -129,12 +129,13 @@ int main(int argc, char*argv[]) {
 				int i;
 				for(i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d\n", __LINE__, i, freqs[i], amps[i]);
-					if (vel == 0 && notes[channel][i] == note) {
+					if (vel == 0 && notes[channel][i] == note && sample_times[channel][i] > 0) {
 						sample_times[channel][i] = -current_instruments[channel].envelope.release;
+						amps[channel][i] *= envp[channel][i];
 						//notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
 						break;
 					}
-					else if (vel > 0 && !notes[channel][i]) {
+					else if (vel > 0 && !notes[channel][i] && sample_times[channel][i] == 0) {
 						sample_times[channel][i] = 1;
 						notes[channel][i] = note;
 						amps[channel][i] = vel * (8192 / 0xff);
@@ -161,8 +162,9 @@ int main(int argc, char*argv[]) {
 				//int freq = 440. * pow(2, (note - 69) / 12.);
 				for(int i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d (trying to turn off %d)\n", __LINE__, i, freqs[i], amps[i], freq);
-					if (notes[channel][i] == note) {
+					if (notes[channel][i] == note && sample_times[channel][i] > 0) {
 						sample_times[channel][i] = -current_instruments[channel].envelope.release;
+						amps[channel][i] *= envp[channel][i];
 						//fprintf(stderr, "%d (%d) off %d\n", note, freq, i);
 						//notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
 						break;
@@ -203,9 +205,30 @@ int main(int argc, char*argv[]) {
 		for (int i = 0; i < BUFSIZE; ++i, ++sample_index) {
 			double wav = 0;
 			for (int channel = 0; channel < CHANNEL_COUNT; ++channel) {
-				if (channel != 9) { // not percussion
-					for (int j = 0; j < NOTE_COUNT; ++j) {
-						if (!sample_times[channel][j]) continue;
+				for (int j = 0; j < NOTE_COUNT; ++j) {
+					if (!sample_times[channel][j]) continue;
+					// envelope
+					#define current_envelope current_instruments[channel].envelope
+					if (sample_times[channel][j] < 0) { // release
+						//envp[channel][j] = current_envelope.sustain * sample_times[channel][j] / -current_envelope.release;
+						envp[channel][j] = sample_times[channel][j] / (double) -current_envelope.release;
+						// when note is released, amps is multiplied by envp to allow smoothness even if released before sustain
+					} else if (sample_times[channel][j] <= current_envelope.attack) { // attack
+						envp[channel][j] = sample_times[channel][j] / (double)current_envelope.attack;
+					} else if (sample_times[channel][j] - current_envelope.attack < current_envelope.decay) { // decay
+						double progress = (sample_times[channel][j] - current_envelope.attack) / (double) current_envelope.decay;
+						envp[channel][j] = 1 - (1-current_envelope.sustain) * progress;
+					} else {
+						envp[channel][j] = current_envelope.sustain;
+					}
+					#undef current_envelope
+					
+					++sample_times[channel][j];
+					if (!sample_times[channel][j]) {
+						notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+					}
+					
+					if (channel != 9) { // not percussion
 						
 						double wava = 0;
 						for (int k = 0; k < current_instruments[channel].count; ++k) {
@@ -213,64 +236,22 @@ int main(int argc, char*argv[]) {
 						}
 						wava *= amps[channel][j] / current_instruments[channel].fullamplitude;
 						
-						// envelope
-						#define current_envelope current_instruments[channel].envelope
-						if (sample_times[channel][j] < 0) { // release
-							envp[channel][j] = current_envelope.sustain * sample_times[channel][j] / -current_envelope.release;
-						} else if (sample_times[channel][j] <= current_envelope.attack) { // attack
-							envp[channel][j] = sample_times[channel][j] / (double)current_envelope.attack;
-						} else if (sample_times[channel][j] - current_envelope.attack < current_envelope.decay) { // decay
-							inline double progress = (sample_times[channel][j] - current_envelope.attack) / (double) current_envelope.decay;
-							envp[channel][j] = 1 - (1-current_envelope.sustain) * progress;
-						} else {
-							envp[channel][j] = current_envelope.sustain;
-						}
-						++sample_times[channel][j];
-						if (!sample_times[channel][j]) {
-							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
-						}
 						wava *= envp[channel][j];
 						
-						#undef current_envelope
 						wav += wava;
 						//if (i%10 == 0) amps[channel][j] *= 0.9999999; // envelope
 						//wav += amps[j] * sin(4.*M_PI*sample_dt*sample_index*freqs[j]) / 3.;
 						//wav += amps[j] * sin(6.*M_PI*sample_dt*sample_index*freqs[j]) / 6.;
 						//wav += amps[j] * sin(8.*M_PI*sample_dt*sample_index*freqs[j]) / 10.;
 					}
-				}
-				else { // percussion
-					for (int j = 0; j < NOTE_COUNT; ++j) {
-						if (!sample_times[channel][j]) {
-							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
-						}
-						if (percussion_positions[j].start == percussion_positions[j].end && amps[channel][j]) {
-							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
-						}
-						if (percussion_positions[j].start == percussion_positions[j].end) continue;
-						
-						// envelope
-						#define current_envelope current_instruments[channel].envelope
-						if (sample_times[channel][j] < 0) { // release
-							envp[channel][j] = current_envelope.sustain * sample_times[channel][j] / -current_envelope.release;
-						} else if (sample_times[channel][j] <= current_envelope.attack) { // attack
-							envp[channel][j] = sample_times[channel][j] / (double)current_envelope.attack;
-						} else if (sample_times[channel][j] - current_envelope.attack < current_envelope.decay) { // decay
-							double progress = (sample_times[channel][j] - current_envelope.attack) / (double) current_envelope.decay;
-							envp[channel][j] = 1 - (1-current_envelope.sustain) * progress;
-						} else {
-							envp[channel][j] = current_envelope.sustain;
-						}
-						++sample_times[channel][j];
-						if (!sample_times[channel][j]) {
-							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
-						}
-						
-						wav += (*percussion_positions[j].start * amps[channel][j] / 32768) * envp[channel][j];
-						percussion_positions[j].start += 2;
-						if (percussion_positions[j].end - percussion_positions[j].start < 2) {
+					else { // percussion
+						if (percussion_positions[j].end - percussion_positions[j].start < 1) {
 							percussion_positions[j] = (struct percussion){NULL, NULL};
-							amps[channel][j] = 0;
+							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+							sample_times[channel][i] = -1;
+						} else {
+							wav += (*percussion_positions[j].start * amps[channel][j] / 32768) * envp[channel][j];
+							percussion_positions[j].start += 2;
 						}
 					}
 					// idk
@@ -283,33 +264,33 @@ int main(int argc, char*argv[]) {
 		}
 		
 		// print notes
-//		fprintf(stderr, "time: %lld\n", (long long int) time(NULL) - start_time);
+		fprintf(stderr, "time: %lld\n", (long long int) time(NULL) - start_time);
 		fprintf(stderr, "chnls:\x1b[0K");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (amps[i][j])
+				if (sample_times[i][j] > 0)
 					fprintf(stderr, " (%2d,%1d)\x1b[0K", i, j);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "freqs:\x1b[0K");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (amps[i][j])
+				if (sample_times[i][j] > 0)
 					fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.1f\x1b[0K", freqs[i][j]);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "amps: \x1b[0K");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (amps[i][j])
+				if (sample_times[i][j] > 0)
 					fprintf(stderr, " %6d\x1b[0K", amps[i][j]);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "envp: \x1b[0K");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (amps[i][j])
+				if (sample_times[i][j] > 0)
 					fprintf(stderr,  " %6.4f\x1b[0K", envp[i][j]);
 				//	fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
-//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
-		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
+		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
+//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
 		fflush(stderr);
 		
 		/* ... and play it */

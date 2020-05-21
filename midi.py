@@ -37,4 +37,6 @@ for msg in mido.MidiFile(sys.argv[1]).play():
 		sys.stdout.buffer.write(bytes(msg.bytes()))
 	elif msg.type == 'note_on' and msg.velocity == 0:
 		sys.stdout.buffer.write(bytes([0x80+msg.channel, msg.note, 0]))
+	elif msg.type == 'program_change':
+		sys.stdout.buffer.write(bytes(msg.bytes()))
 	sys.stdout.buffer.flush()
