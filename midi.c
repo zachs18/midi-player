@@ -36,6 +36,7 @@
 #include <pulse/error.h>
 
 #include "percussion.h"
+#include "instrument.h"
 
 #define BUFSIZE 128
 #define RATE 44100
@@ -45,84 +46,14 @@
 
 #define CHANNEL_MASK 0x0f
 #define MSG_MASK 0xf0
-#define NOTE_ON 0x90
 #define NOTE_OFF 0x80
+#define NOTE_ON 0x90
+#define PROGRAM_CHANGE 0xC0
 
-struct envelope {
-	int attack;
-	int decay;
-	double sustain;
-	int release;
-	// https://en.wikipedia.org/wiki/Envelope_(music)
-	// times are in 1/44100 second intervals
-	// attack is the time until full volume
-	// decay is the time from full volume until sustain volume
-	// sustain is the volume during sustain
-	// release is teh time from release to no volume
-};
 
-struct envelope default_envelope = 
-{
-	1,
-	22050,
-	0.5,
-	0,
-};
-
-struct spectrum {
-	int count;
-	double *amps;
-	double fullamp;
-	struct envelope envelope;
-};
-
-static struct spectrum violin = {
-	8,
-	(double[]){1., .6, .6, .7, .4, .2, .4, .1},
-	1. + .6 + .6 + .7 + .4 + .2 + .4 + .1,
-	default_envelope,
-};
-
-static struct spectrum sine = {
-	1,
-	(double[]){1.},
-	1.,
-	default_envelope,
-};
-static struct spectrum test = {
-	3,
-	(double[]){0, 1., 0.6},
-	1.6,
-	default_envelope,
-};
-
-static struct spectrum saw = {
-	7,
-	(double[]){1., -1/2., 1/3., -1/4., 1/5., -1/6., 1/7.},
-	1. + 1/2. + 1/3. + 1/4. + 1/5. + 1/6. + 1/7.,
-	default_envelope,
-};
-
-static struct spectrum square = {
-	7,
-	(double[]){1., 0., 1/3., 0., 1/5., 0., 1/7.},
-	1. + 1/3. + 1/5. + 1/7.,
-	default_envelope,
-};
-
-static struct spectrum triangle = {
-	7,
-	(double[]){1., 0., -1/9., 0., 1/25., 0., -1/49.},
-	1. + 1/9. + 1/25. + 1/49.,
-	default_envelope,
-};
-
-static struct spectrum flute = {
-	5,
-	(double[]){1., 1., .1, .2, .2},
-	1. + 1. + .1 + .2 + .2,
-	default_envelope,
-};
+#ifndef STARTING_INSTRUMENT
+#define STARTING_INSTRUMENT instruments[40]
+#endif
 
 int main(int argc, char*argv[]) {
 
@@ -138,15 +69,21 @@ int main(int argc, char*argv[]) {
 
 	pa_simple *s = NULL;
 	int prog_ret = 1;
-	int error;
+	int error = 0;
 	int notes[CHANNEL_COUNT][NOTE_COUNT] = {0};
 	double freqs[CHANNEL_COUNT][NOTE_COUNT] = {0.};
 	int amps[CHANNEL_COUNT][NOTE_COUNT] = {0};
-	int sample_lengths[CHANNEL_COUNT][NOTE_COUNT] = {0}; // for envelope
-	double *percussion_sample_positions[NOTE_COUNT] = {0}; // channel 9 percussion samples
-	struct spectrum *instruments = calloc(CHANNEL_COUNT, sizeof(struct spectrum));
-	for (int i = 0; i < CHANNEL_COUNT; ++i) instruments[i] = STARTING_INSTRUMENT;
-	//instruments[0] = violin;
+	double (*envp)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*envp));
+	int sample_times[CHANNEL_COUNT][NOTE_COUNT] = {0}; // for envelope
+	struct percussion *percussion_positions = calloc(NOTE_COUNT, sizeof(*percussion_positions));
+	struct instrument *current_instruments = calloc(CHANNEL_COUNT, sizeof(*current_instruments));
+	for (int i = 0; i < CHANNEL_COUNT; ++i) current_instruments[i] = STARTING_INSTRUMENT;
+	current_instruments[9] = (struct instrument) {
+		0,
+		NULL,
+		1.0,
+		default_envelope,
+	};
 	
 
 	time_t start_time = time(NULL);
@@ -165,7 +102,7 @@ int main(int argc, char*argv[]) {
 		goto finish;
 	}
 	// Can't use poll and stdio, have to use read
-	for (;;) {
+	while (1) {
 		signed short buf[BUFSIZE];
 		ssize_t buf_bytes = BUFSIZE*sizeof(signed short);
 		ssize_t read_bytes = 0;
@@ -175,7 +112,7 @@ int main(int argc, char*argv[]) {
 		while (pollfd.revents & (POLLIN | POLLHUP)) {
 			//fprintf(stderr, "POLLIN\n\n");
 			pollfd.revents = 0;
-			unsigned char msg[8]; // note_on: 3 bytes, note_off: 3 bytes
+			unsigned char msg[8]; // note_on: 3 bytes, note_off: 3 bytes, program_change: 2 bytes
 			int note, vel, channel;
 			int ret = read(STDIN_FILENO, msg, 1);
 			if (ret == 0) { // eof
@@ -189,27 +126,30 @@ int main(int argc, char*argv[]) {
 				if (ret != 2) goto finish;
 				note = msg[0]; // note number
 				vel = msg[1]; // velocity
-				for(int i = 0; i < NOTE_COUNT; ++i) {
+				int i;
+				for(i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d\n", __LINE__, i, freqs[i], amps[i]);
 					if (vel == 0 && notes[channel][i] == note) {
-						notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
+						sample_times[channel][i] = -current_instruments[channel].envelope.release;
+						//notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
 						break;
 					}
 					else if (vel > 0 && !notes[channel][i]) {
+						sample_times[channel][i] = 1;
+						notes[channel][i] = note;
+						amps[channel][i] = vel * (8192 / 0xff);
 						if (channel == 9) { // percussion
-							freqs[channel][i] = notes[channel][i] = note;
-							amps[channel][i] = vel * (8192 / 0xff);
-							percussion_sample_positions[i] = percussions[note];
+							freqs[channel][i] = note;
+							percussion_positions[i] = percussions[note];
 						}
 						else {
-							//double freq = 440. * pow(2, (note - 69) / 12.);
 							freqs[channel][i] = 440. * pow(2, (note - 69) / 12.);
-							notes[channel][i] = note;
-							amps[channel][i] = vel * (8192 / 0xff);
-							//fprintf(stderr, "%d (%d) on %d\n", note, freqs[i], i);
 						}
 						break;
 					}
+				}
+				if (i == NOTE_COUNT) { // no free note found
+					
 				}
 			}
 			else if ((msg[0]&MSG_MASK) == NOTE_OFF) {
@@ -222,10 +162,20 @@ int main(int argc, char*argv[]) {
 				for(int i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d (trying to turn off %d)\n", __LINE__, i, freqs[i], amps[i], freq);
 					if (notes[channel][i] == note) {
+						sample_times[channel][i] = -current_instruments[channel].envelope.release;
 						//fprintf(stderr, "%d (%d) off %d\n", note, freq, i);
-						notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
+						//notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
 						break;
 					}
+				}
+			}
+			else if ((msg[0]&MSG_MASK) == PROGRAM_CHANGE) {
+				channel = msg[0] & CHANNEL_MASK;
+				ret = read(STDIN_FILENO, msg, 1);
+				if (ret != 1) goto finish;
+				int inst = msg[0]; // program number
+				if (instruments[inst].amplitudes != NULL) {
+					current_instruments[channel] = instruments[inst];
 				}
 			}
 			//else fprintf(stderr, "0x%x\n", msg[0]);
@@ -255,13 +205,35 @@ int main(int argc, char*argv[]) {
 			for (int channel = 0; channel < CHANNEL_COUNT; ++channel) {
 				if (channel != 9) { // not percussion
 					for (int j = 0; j < NOTE_COUNT; ++j) {
-						if (!amps[channel][j]) continue;
+						if (!sample_times[channel][j]) continue;
+						
 						double wava = 0;
-						for (int k = 0; k < instruments[channel].count; ++k) {
-							wava += instruments[channel].amps[k] * sin((k+1)*2.*M_PI*sample_dt*sample_index*freqs[channel][j]);
+						for (int k = 0; k < current_instruments[channel].count; ++k) {
+							wava += current_instruments[channel].amplitudes[k] * sin((k+1)*2.*M_PI*sample_dt*sample_index*freqs[channel][j]);
 						}
-						wav += wava * amps[channel][j] / instruments[channel].fullamp;
-						if (i%10 == 0) amps[channel][j] *= 0.9999999; // envelope
+						wava *= amps[channel][j] / current_instruments[channel].fullamplitude;
+						
+						// envelope
+						#define current_envelope current_instruments[channel].envelope
+						if (sample_times[channel][j] < 0) { // release
+							envp[channel][j] = current_envelope.sustain * sample_times[channel][j] / -current_envelope.release;
+						} else if (sample_times[channel][j] <= current_envelope.attack) { // attack
+							envp[channel][j] = sample_times[channel][j] / (double)current_envelope.attack;
+						} else if (sample_times[channel][j] - current_envelope.attack < current_envelope.decay) { // decay
+							inline double progress = (sample_times[channel][j] - current_envelope.attack) / (double) current_envelope.decay;
+							envp[channel][j] = 1 - (1-current_envelope.sustain) * progress;
+						} else {
+							envp[channel][j] = current_envelope.sustain;
+						}
+						++sample_times[channel][j];
+						if (!sample_times[channel][j]) {
+							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+						}
+						wava *= envp[channel][j];
+						
+						#undef current_envelope
+						wav += wava;
+						//if (i%10 == 0) amps[channel][j] *= 0.9999999; // envelope
 						//wav += amps[j] * sin(4.*M_PI*sample_dt*sample_index*freqs[j]) / 3.;
 						//wav += amps[j] * sin(6.*M_PI*sample_dt*sample_index*freqs[j]) / 6.;
 						//wav += amps[j] * sin(8.*M_PI*sample_dt*sample_index*freqs[j]) / 10.;
@@ -269,12 +241,35 @@ int main(int argc, char*argv[]) {
 				}
 				else { // percussion
 					for (int j = 0; j < NOTE_COUNT; ++j) {
-						if (!percussion_sample_positions[j] || !amps[channel][j]) continue;
-//							if (!percussion_sample_positions[j]) continue;
-//						}
-						wav += *percussion_sample_positions[j]++ * amps[channel][j];
-						if (*percussion_sample_positions[j] > 1.0) { // greater than 1.0 sample indicates end of wave
-							percussion_sample_positions[j] = NULL;
+						if (!sample_times[channel][j]) {
+							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+						}
+						if (percussion_positions[j].start == percussion_positions[j].end && amps[channel][j]) {
+							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+						}
+						if (percussion_positions[j].start == percussion_positions[j].end) continue;
+						
+						// envelope
+						#define current_envelope current_instruments[channel].envelope
+						if (sample_times[channel][j] < 0) { // release
+							envp[channel][j] = current_envelope.sustain * sample_times[channel][j] / -current_envelope.release;
+						} else if (sample_times[channel][j] <= current_envelope.attack) { // attack
+							envp[channel][j] = sample_times[channel][j] / (double)current_envelope.attack;
+						} else if (sample_times[channel][j] - current_envelope.attack < current_envelope.decay) { // decay
+							double progress = (sample_times[channel][j] - current_envelope.attack) / (double) current_envelope.decay;
+							envp[channel][j] = 1 - (1-current_envelope.sustain) * progress;
+						} else {
+							envp[channel][j] = current_envelope.sustain;
+						}
+						++sample_times[channel][j];
+						if (!sample_times[channel][j]) {
+							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+						}
+						
+						wav += (*percussion_positions[j].start * amps[channel][j] / 32768) * envp[channel][j];
+						percussion_positions[j].start += 2;
+						if (percussion_positions[j].end - percussion_positions[j].start < 2) {
+							percussion_positions[j] = (struct percussion){NULL, NULL};
 							amps[channel][j] = 0;
 						}
 					}
@@ -307,11 +302,12 @@ int main(int argc, char*argv[]) {
 				if (amps[i][j])
 					fprintf(stderr, " %6d\x1b[0K", amps[i][j]);
 		fprintf(stderr, "\n");
-		fprintf(stderr, "amps: \x1b[0K");
+		fprintf(stderr, "envp: \x1b[0K");
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				if (amps[i][j])
-					fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
+					fprintf(stderr,  " %6.4f\x1b[0K", envp[i][j]);
+				//	fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
 //		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
 		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
 		fflush(stderr);

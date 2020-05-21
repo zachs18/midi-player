@@ -1,23 +1,16 @@
-#include <stddef.h>
+#include "instrument.h"
 
-// the percussion/#.h files were generated from a single note of each in Musescore 3, output to OGG, fed through ffmpeg to s16le pcm raw, with each sample divided by 32768.0 and output as a double in an array, with a trailing 2.0
+#include "instrument/violin.h"
+#include "instrument/flute.h"
+#include "instrument/square.h"
+#include "instrument/sine.h"
+#include "instrument/saw.h"
+#include "instrument/triangle.h"
 
-#include "percussion.h"
+// https://en.wikipedia.org/wiki/General_MIDI#Percussion
 
-#include "percussion/35.h"
-#include "percussion/36.h"
-#include "percussion/37.h"
-#include "percussion/38.h"
-
-#include "percussion/40.h"
-
-#include "percussion/44.h"
-
-#include "percussion/55.h"
-
-#include "percussion/57.h"
-
-const struct percussion percussions[128] = {
+const struct instrument instruments[128] = {
+	// Piano
 	{}, // 0
 	{}, // 1
 	{}, // 2
@@ -26,6 +19,8 @@ const struct percussion percussions[128] = {
 	{}, // 5
 	{}, // 6
 	{}, // 7
+
+	// Chromatic Percussion
 	{}, // 8
 	{}, // 9
 	{}, // 10
@@ -34,6 +29,8 @@ const struct percussion percussions[128] = {
 	{}, // 13
 	{}, // 14
 	{}, // 15
+
+	// Organ
 	{}, // 16
 	{}, // 17
 	{}, // 18
@@ -42,6 +39,8 @@ const struct percussion percussions[128] = {
 	{}, // 21
 	{}, // 22
 	{}, // 23
+
+	// Guitar
 	{}, // 24
 	{}, // 25
 	{}, // 26
@@ -50,22 +49,28 @@ const struct percussion percussions[128] = {
 	{}, // 29
 	{}, // 30
 	{}, // 31
+
+	// Bass
 	{}, // 32
 	{}, // 33
 	{}, // 34
-	acoustic_bass_drum_35, // 35
-	bass_drum_36, // 36
-	side_stick_37, // 37
-	acoustic_snare_38, // 38
+	{}, // 35
+	{}, // 36
+	{}, // 37
+	{}, // 38
 	{}, // 39
-	electric_snare_40, // 40
+
+	// Strings
+	violin, // 40
 	{}, // 41
 	{}, // 42
 	{}, // 43
-	pedal_high_hat_44, // 44
+	{}, // 44
 	{}, // 45
 	{}, // 46
 	{}, // 47
+
+	// Ensemble
 	{}, // 48
 	{}, // 49
 	{}, // 50
@@ -73,15 +78,19 @@ const struct percussion percussions[128] = {
 	{}, // 52
 	{}, // 53
 	{}, // 54
-	splash_cymbal_55, // 55
+	{}, // 55
+
+	// Brass
 	{}, // 56
-	crash_cymbal_2_57, // 57
+	{}, // 57
 	{}, // 58
 	{}, // 59
 	{}, // 60
 	{}, // 61
 	{}, // 62
 	{}, // 63
+
+	// Reed
 	{}, // 64
 	{}, // 65
 	{}, // 66
@@ -90,22 +99,28 @@ const struct percussion percussions[128] = {
 	{}, // 69
 	{}, // 70
 	{}, // 71
+
+	// Pipe
 	{}, // 72
-	{}, // 73
+	flute, // 73
 	{}, // 74
 	{}, // 75
 	{}, // 76
 	{}, // 77
 	{}, // 78
 	{}, // 79
-	{}, // 80
-	{}, // 81
+
+	// Synth Lead
+	square, // 80
+	saw, // 81
 	{}, // 82
 	{}, // 83
 	{}, // 84
 	{}, // 85
 	{}, // 86
 	{}, // 87
+
+	// Synth Pad
 	{}, // 88
 	{}, // 89
 	{}, // 90
@@ -114,6 +129,8 @@ const struct percussion percussions[128] = {
 	{}, // 93
 	{}, // 94
 	{}, // 95
+
+	// Synth Effects
 	{}, // 96
 	{}, // 97
 	{}, // 98
@@ -122,6 +139,8 @@ const struct percussion percussions[128] = {
 	{}, // 101
 	{}, // 102
 	{}, // 103
+
+	// Ethnic
 	{}, // 104
 	{}, // 105
 	{}, // 106
@@ -130,6 +149,8 @@ const struct percussion percussions[128] = {
 	{}, // 109
 	{}, // 110
 	{}, // 111
+
+	// Percussive
 	{}, // 112
 	{}, // 113
 	{}, // 114
@@ -138,6 +159,8 @@ const struct percussion percussions[128] = {
 	{}, // 117
 	{}, // 118
 	{}, // 119
+
+	// Sound Effects
 	{}, // 120
 	{}, // 121
 	{}, // 122
