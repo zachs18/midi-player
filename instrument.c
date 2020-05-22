@@ -1,6 +1,7 @@
 #include "instrument.h"
 
 #include "instrument/violin.h"
+#include "instrument/pizzicato_strings.h"
 #include "instrument/flute.h"
 #include "instrument/square.h"
 #include "instrument/sine.h"
@@ -62,11 +63,11 @@ const struct instrument instruments[128] = {
 
 	// Strings
 	violin, // 40
-	{}, // 41
-	{}, // 42
-	{}, // 43
-	{}, // 44
-	{}, // 45
+		violin, // 41
+		violin, // 42
+		violin, // 43
+		violin, // 44
+	pizzicato_strings, // 45
 	{}, // 46
 	{}, // 47
 

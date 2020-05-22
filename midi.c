@@ -175,9 +175,12 @@ int main(int argc, char*argv[]) {
 				channel = msg[0] & CHANNEL_MASK;
 				ret = read(STDIN_FILENO, msg, 1);
 				if (ret != 1) goto finish;
-				int inst = msg[0]; // program number
-				if (instruments[inst].amplitudes != NULL) {
-					current_instruments[channel] = instruments[inst];
+				//fprintf(stderr, "program change on channel %d to %d\n\n\n\n", channel, msg[0]);
+				if (channel != 9) { // Ignore program changes on percussion channel
+					int inst = msg[0]; // program number
+					if (instruments[inst].amplitudes != NULL) {
+						current_instruments[channel] = instruments[inst];
+					}
 				}
 			}
 			//else fprintf(stderr, "0x%x\n", msg[0]);
@@ -206,7 +209,10 @@ int main(int argc, char*argv[]) {
 			double wav = 0;
 			for (int channel = 0; channel < CHANNEL_COUNT; ++channel) {
 				for (int j = 0; j < NOTE_COUNT; ++j) {
-					if (!sample_times[channel][j]) continue;
+					if (!sample_times[channel][j]) {
+						notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+						continue;
+					}
 					// envelope
 					#define current_envelope current_instruments[channel].envelope
 					if (sample_times[channel][j] < 0) { // release
@@ -263,35 +269,37 @@ int main(int argc, char*argv[]) {
 				buf[i] = wav;
 		}
 		
-		// print notes
-		fprintf(stderr, "time: %lld\n", (long long int) time(NULL) - start_time);
-		fprintf(stderr, "chnls:\x1b[0K");
-		for (int i = 0; i < CHANNEL_COUNT; ++i)
-			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (sample_times[i][j] > 0)
-					fprintf(stderr, " (%2d,%1d)\x1b[0K", i, j);
-		fprintf(stderr, "\n");
-		fprintf(stderr, "freqs:\x1b[0K");
-		for (int i = 0; i < CHANNEL_COUNT; ++i)
-			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (sample_times[i][j] > 0)
-					fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.1f\x1b[0K", freqs[i][j]);
-		fprintf(stderr, "\n");
-		fprintf(stderr, "amps: \x1b[0K");
-		for (int i = 0; i < CHANNEL_COUNT; ++i)
-			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (sample_times[i][j] > 0)
-					fprintf(stderr, " %6d\x1b[0K", amps[i][j]);
-		fprintf(stderr, "\n");
-		fprintf(stderr, "envp: \x1b[0K");
-		for (int i = 0; i < CHANNEL_COUNT; ++i)
-			for (int j = 0; j < NOTE_COUNT; ++j)
-				if (sample_times[i][j] > 0)
-					fprintf(stderr,  " %6.4f\x1b[0K", envp[i][j]);
-				//	fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
-		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
-//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
-		fflush(stderr);
+		if (1) {
+			// print notes
+			fprintf(stderr, "time: %lld\n", (long long int) time(NULL) - start_time);
+			fprintf(stderr, "chnls:\x1b[0K");
+			for (int i = 0; i < CHANNEL_COUNT; ++i)
+				for (int j = 0; j < NOTE_COUNT; ++j)
+					if (sample_times[i][j] > 0)
+						fprintf(stderr, " (%2d,%1d)\x1b[0K", i, j);
+			fprintf(stderr, "\n");
+			fprintf(stderr, "freqs:\x1b[0K");
+			for (int i = 0; i < CHANNEL_COUNT; ++i)
+				for (int j = 0; j < NOTE_COUNT; ++j)
+					if (sample_times[i][j] > 0)
+						fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.1f\x1b[0K", freqs[i][j]);
+			fprintf(stderr, "\n");
+			fprintf(stderr, "amps: \x1b[0K");
+			for (int i = 0; i < CHANNEL_COUNT; ++i)
+				for (int j = 0; j < NOTE_COUNT; ++j)
+					if (sample_times[i][j] > 0)
+						fprintf(stderr, " %6d\x1b[0K", amps[i][j]);
+			fprintf(stderr, "\n");
+			fprintf(stderr, "envp: \x1b[0K");
+			for (int i = 0; i < CHANNEL_COUNT; ++i)
+				for (int j = 0; j < NOTE_COUNT; ++j)
+					if (sample_times[i][j] > 0)
+						fprintf(stderr,  " %6.4f\x1b[0K", envp[i][j]);
+					//	fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
+			fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
+	//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
+			fflush(stderr);
+		}
 		
 		/* ... and play it */
 		//fwrite(buf, 2, BUFSIZE, temp);
