@@ -1,6 +1,6 @@
 default: Debug ;
 
-CFLAGS := -lm -lpulse -lpulse-simple -Wall -g
+CFLAGS := -lm -lpulse -lpulse-simple -Wall -Wextra
 
 PERCUSSION_HEADERS := $(wildcard percussion/*.h)
 PERCUSSION_OBJS := $(PERCUSSION_HEADERS:.h=.o)
@@ -21,6 +21,7 @@ compile: midi.o percussion.o instrument.o percussion
 
 midi: compile ;
 
+Debug: CFLAGS += -g
 Debug: midi ;
 
 Release: CFLAGS += -DNO_DEBUG -O2

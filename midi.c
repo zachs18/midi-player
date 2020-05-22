@@ -55,7 +55,7 @@
 #define STARTING_INSTRUMENT instruments[40]
 #endif
 
-int main(int argc, char*argv[]) {
+int main(int argc, char **argv) {
 
 	/* The Sample format to use */
 	static const pa_sample_spec ss = {
@@ -70,13 +70,25 @@ int main(int argc, char*argv[]) {
 	pa_simple *s = NULL;
 	int prog_ret = 1;
 	int error = 0;
-	int notes[CHANNEL_COUNT][NOTE_COUNT] = {0};
-	double freqs[CHANNEL_COUNT][NOTE_COUNT] = {0.};
-	int amps[CHANNEL_COUNT][NOTE_COUNT] = {0};
+	int (*notes)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*notes));
+	double (*freqs)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*freqs));
+	int (*amps)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*amps));
 	double (*envp)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*envp));
-	int sample_times[CHANNEL_COUNT][NOTE_COUNT] = {0}; // for envelope
+	int (*sample_times)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*sample_times)); // for envelope
 	struct percussion *percussion_positions = calloc(NOTE_COUNT, sizeof(*percussion_positions));
 	struct instrument *current_instruments = calloc(CHANNEL_COUNT, sizeof(*current_instruments));
+	
+	if (!notes || !freqs || !amps || !envp || !sample_times || !percussion_positions || !current_instruments) {
+		fprintf(stderr, "Memory allocation failed");
+		free(notes);
+		free(freqs);
+		free(amps);
+		free(envp);
+		free(sample_times);
+		free(percussion_positions);
+		free(current_instruments);
+	}
+	
 	for (int i = 0; i < CHANNEL_COUNT; ++i) current_instruments[i] = STARTING_INSTRUMENT;
 	current_instruments[9] = (struct instrument) {
 		0,
@@ -105,7 +117,6 @@ int main(int argc, char*argv[]) {
 	while (1) {
 		signed short buf[BUFSIZE];
 		ssize_t buf_bytes = BUFSIZE*sizeof(signed short);
-		ssize_t read_bytes = 0;
 		
 		poll(&pollfd, 1, 1);
 		//if (pollfd.revents) fprintf(stderr, "revents: 0x%x (in: 0x%x)\n", pollfd.revents, POLLIN);
@@ -327,6 +338,13 @@ finish:
 	fprintf(stderr, "\r\x1b[0K");
 	if (s)
 		pa_simple_free(s);
+	free(notes);
+	free(freqs);
+	free(amps);
+	free(envp);
+	free(sample_times);
+	free(percussion_positions);
+	free(current_instruments);
 
 	return prog_ret;
 }
