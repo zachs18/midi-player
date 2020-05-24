@@ -3,6 +3,18 @@ import sys
 import os
 import time
 import mido
+import struct
+import array
+
+Envelope = struct.Struct("iidixxxx")
+
+def make_instrument(channel: int, amps: "List[float]") -> bytes:
+	return b"\xF0" + \
+		struct.pack("B", ((len(amps) << 4) | (channel & 15))) + \
+		array.array("d", amps).tobytes() + \
+		b"\xF1" + \
+		Envelope.pack(4410, 44100, 0.3, 10000)
+
 
 def playnote(note, amp):
 	if amp != 0:
@@ -24,6 +36,11 @@ while True:
 				sys.stdout.buffer.write(bytes(msg.bytes()))
 			elif msg.type == 'program_change':
 				sys.stdout.buffer.write(bytes(msg.bytes()))
+#				if msg.program > 1:
+#					sys.stdout.buffer.write(bytes(msg.bytes()))
+#				else:
+#					amps = [1.0, 0, 1/4, 0, 1/9, 0, 1/16, 0, 1/49]
+#					sys.stdout.buffer.write(make_instrument(msg.channel, amps))
 			sys.stdout.buffer.flush()
 		break
 	except KeyboardInterrupt:

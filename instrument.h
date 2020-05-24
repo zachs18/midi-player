@@ -17,7 +17,7 @@ struct envelope {
 };
 
 static const struct envelope default_envelope = {
-	1,
+	441,
 	22050,
 	0.5,
 	4410,

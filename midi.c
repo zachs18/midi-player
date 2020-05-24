@@ -50,6 +50,8 @@
 #define NOTE_ON 0x90
 #define PROGRAM_CHANGE 0xC0
 
+#define SYSTEM_EXCLUSIVE 0xF0
+
 
 #ifndef STARTING_INSTRUMENT
 #define STARTING_INSTRUMENT instruments[40]
@@ -194,6 +196,42 @@ int main(int argc, char **argv) {
 					}
 				}
 			}
+			else if ((msg[0]&MSG_MASK) == SYSTEM_EXCLUSIVE) {
+				if (msg[0] == 0xF0) { // custom instrument
+					ret = read(STDIN_FILENO, msg, 1); // length of double array in msg[0] high nibble, channel in low
+					if (ret != 1) goto finish;
+					
+					int channel = msg[0] & 0x0F;
+					int length = (msg[0] & 0xF0) >> 4;
+					
+					double *old_amplitudes = current_instruments[channel].amplitudes;
+					if (current_instruments[channel].count > 0 && old_amplitudes[0] < 0) {
+						free(old_amplitudes);
+						current_instruments[channel].amplitudes = NULL;
+						current_instruments[channel].count = 0;
+						current_instruments[channel].fullamplitude = 0.;
+					}
+					
+					if (length) {
+						double *new_amplitudes = malloc(length * sizeof(double));
+						if (!new_amplitudes) goto finish;
+
+						ret = read(STDIN_FILENO, new_amplitudes, length*sizeof(double));
+						if (ret != length*sizeof(double)) goto finish;
+
+						if (new_amplitudes[0] > 0) new_amplitudes[0] *= -1;
+						if (new_amplitudes[0] == 0) new_amplitudes[0] = -0.01; // negative first amplitude implies free()
+
+						current_instruments[channel].amplitudes = new_amplitudes;
+						current_instruments[channel].count = length;
+						for (int i = 0; i < length; ++i)
+							current_instruments[channel].fullamplitude += new_amplitudes[i];
+					}
+				} else if (msg[0] == 0xF1) { // custom envelope
+					ret = read(STDIN_FILENO, &current_instruments[channel].envelope, sizeof(struct envelope));
+					if (ret != sizeof(struct envelope)) goto finish;
+				}
+			}
 			//else fprintf(stderr, "0x%x\n", msg[0]);
 			poll(&pollfd, 1, 1);
 		}
@@ -215,7 +253,7 @@ int main(int argc, char **argv) {
 		int ampsum = 0;
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
-				ampsum += amps[i][j];
+				ampsum += amps[i][j] * envp[i][j];
 		for (int i = 0; i < BUFSIZE; ++i, ++sample_index) {
 			double wav = 0;
 			for (int channel = 0; channel < CHANNEL_COUNT; ++channel) {

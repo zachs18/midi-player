@@ -3,6 +3,7 @@
 #include "instrument/violin.h"
 #include "instrument/pizzicato_strings.h"
 #include "instrument/flute.h"
+#include "instrument/recorder.h"
 #include "instrument/square.h"
 #include "instrument/sine.h"
 #include "instrument/saw.h"
@@ -104,7 +105,7 @@ const struct instrument instruments[128] = {
 	// Pipe
 	{}, // 72
 	flute, // 73
-	{}, // 74
+	recorder, // 74
 	{}, // 75
 	{}, // 76
 	{}, // 77
