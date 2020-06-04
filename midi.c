@@ -41,7 +41,11 @@
 #define BUFSIZE 128
 #define RATE 44100
 #define AMPLITUDE 32000
+
+#ifndef NOTE_COUNT
 #define NOTE_COUNT 8
+#endif
+
 #define CHANNEL_COUNT 16
 
 #define CHANNEL_MASK 0x0f
@@ -127,7 +131,7 @@ int main(int argc, char **argv) {
 			pollfd.revents = 0;
 			unsigned char msg[8]; // note_on: 3 bytes, note_off: 3 bytes, program_change: 2 bytes
 			int note, vel, channel;
-			int ret = read(STDIN_FILENO, msg, 1);
+			ssize_t ret = read(STDIN_FILENO, msg, 1);
 			if (ret == 0) { // eof
 				prog_ret = 0;
 				goto finish;
@@ -217,7 +221,7 @@ int main(int argc, char **argv) {
 						if (!new_amplitudes) goto finish;
 
 						ret = read(STDIN_FILENO, new_amplitudes, length*sizeof(double));
-						if (ret != length*sizeof(double)) goto finish;
+						if (ret < 0 || (unsigned long)ret != length*sizeof(double)) goto finish;
 
 						if (new_amplitudes[0] > 0) new_amplitudes[0] *= -1;
 						if (new_amplitudes[0] == 0) new_amplitudes[0] = -0.01; // negative first amplitude implies free()
@@ -228,6 +232,11 @@ int main(int argc, char **argv) {
 							current_instruments[channel].fullamplitude += new_amplitudes[i];
 					}
 				} else if (msg[0] == 0xF1) { // custom envelope
+					ret = read(STDIN_FILENO, msg, 1); // length of double array in msg[0] high nibble, channel in low
+					if (ret != 1) goto finish;
+
+					channel = msg[0];
+
 					ret = read(STDIN_FILENO, &current_instruments[channel].envelope, sizeof(struct envelope));
 					if (ret != sizeof(struct envelope)) goto finish;
 				}
@@ -317,7 +326,7 @@ int main(int argc, char **argv) {
 			else
 				buf[i] = wav;
 		}
-		
+#ifndef DONT_PRINT
 		if (1) {
 			// print notes
 			fprintf(stderr, "time: %lld\n", (long long int) time(NULL) - start_time);
@@ -349,6 +358,7 @@ int main(int argc, char **argv) {
 	//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
 			fflush(stderr);
 		}
+#endif // ndef DONT_PRINT
 		
 		/* ... and play it */
 		//fwrite(buf, 2, BUFSIZE, temp);

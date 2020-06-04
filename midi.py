@@ -13,6 +13,7 @@ def make_instrument(channel: int, amps: "List[float]") -> bytes:
 		struct.pack("B", ((len(amps) << 4) | (channel & 15))) + \
 		array.array("d", amps).tobytes() + \
 		b"\xF1" + \
+		struct.pack("B", channel & 15) + \
 		Envelope.pack(4410, 44100, 0.3, 10000)
 
 
@@ -23,12 +24,17 @@ def playnote(note, amp):
 		sys.stdout.buffer.write(bytes([1, note]))
 	sys.stdout.buffer.flush()
 
-file = mido.MidiFile(sys.argv[1])
+if sys.argv[1] == "--loop":
+	loop = True
+	file = mido.MidiFile(sys.argv[2])
+else:
+	loop = False
+	file = mido.MidiFile(sys.argv[1])
 sys.stderr.write("%.2f seconds\n" % file.length)
 play = file.play()
 while True:
 	try:
-		for msg in play:
+		for msg in play if not loop else file.play():
 			#sys.stderr.write(str(msg.bytes()))
 			if msg.type == 'note_on':
 				sys.stdout.buffer.write(bytes(msg.bytes()))

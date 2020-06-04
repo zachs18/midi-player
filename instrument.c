@@ -8,12 +8,14 @@
 #include "instrument/sine.h"
 #include "instrument/saw.h"
 #include "instrument/triangle.h"
+#include "instrument/guitar.h"
+#include "instrument/piano.h"
 
 // https://en.wikipedia.org/wiki/General_MIDI#Percussion
 
 const struct instrument instruments[128] = {
 	// Piano
-	{}, // 0
+	piano, // 0
 	{}, // 1
 	{}, // 2
 	{}, // 3
@@ -43,7 +45,7 @@ const struct instrument instruments[128] = {
 	{}, // 23
 
 	// Guitar
-	{}, // 24
+		guitar, // 24
 	{}, // 25
 	{}, // 26
 	{}, // 27
