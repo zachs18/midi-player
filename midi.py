@@ -36,9 +36,7 @@ while True:
 	try:
 		for msg in play if not loop else file.play():
 			#sys.stderr.write(str(msg.bytes()))
-			if msg.type == 'note_on':
-				sys.stdout.buffer.write(bytes(msg.bytes()))
-			elif msg.type == 'note_off':
+			if msg.type in ('note_on', 'note_off', 'pitchwheel'):
 				sys.stdout.buffer.write(bytes(msg.bytes()))
 			elif msg.type == 'program_change':
 				sys.stdout.buffer.write(bytes(msg.bytes()))

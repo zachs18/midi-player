@@ -1,13 +1,9 @@
-midi_flute
-midi_violin
+midi
 midi_keyboard
-midi_saw
-midi_sine
-midi_square
-midi_stdin
-midi_test
-midi_triangle
 temp*
+old*
 creepy_midi_violin
 creepy_midi_violin_down
 *.o
+*.so
+*.raw

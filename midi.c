@@ -53,6 +53,7 @@
 #define NOTE_OFF 0x80
 #define NOTE_ON 0x90
 #define PROGRAM_CHANGE 0xC0
+#define PITCH_BEND 0xE0
 
 #define SYSTEM_EXCLUSIVE 0xF0
 
@@ -83,8 +84,9 @@ int main(int argc, char **argv) {
 	int (*sample_times)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*sample_times)); // for envelope
 	struct percussion *percussion_positions = calloc(NOTE_COUNT, sizeof(*percussion_positions));
 	struct instrument *current_instruments = calloc(CHANNEL_COUNT, sizeof(*current_instruments));
+	double *pitch_bend_semitones = calloc(CHANNEL_COUNT, sizeof(*pitch_bend_semitones));
 	
-	if (!notes || !freqs || !amps || !envp || !sample_times || !percussion_positions || !current_instruments) {
+	if (!notes || !freqs || !amps || !envp || !sample_times || !percussion_positions || !current_instruments || !pitch_bend_semitones) {
 		fprintf(stderr, "Memory allocation failed");
 		free(notes);
 		free(freqs);
@@ -93,9 +95,15 @@ int main(int argc, char **argv) {
 		free(sample_times);
 		free(percussion_positions);
 		free(current_instruments);
+		free(pitch_bend_semitones);
+		exit(EXIT_FAILURE);
 	}
 	
-	for (int i = 0; i < CHANNEL_COUNT; ++i) current_instruments[i] = STARTING_INSTRUMENT;
+	for (int i = 0; i < CHANNEL_COUNT; ++i) {
+		current_instruments[i] = STARTING_INSTRUMENT;
+		pitch_bend_semitones[i] = 0.0;
+	}
+	
 	current_instruments[9] = (struct instrument) {
 		0,
 		NULL,
@@ -161,7 +169,7 @@ int main(int argc, char **argv) {
 							percussion_positions[i] = percussions[note];
 						}
 						else {
-							freqs[channel][i] = 440. * pow(2, (note - 69) / 12.);
+							freqs[channel][i] = 440. * pow(2, (note - 69 + pitch_bend_semitones[channel]) / 12.);
 						}
 						break;
 					}
@@ -199,6 +207,15 @@ int main(int argc, char **argv) {
 						current_instruments[channel] = instruments[inst];
 					}
 				}
+			}
+			else if ((msg[0]&MSG_MASK) == PITCH_BEND) {
+				//fprintf(stderr, "PITCH_BEND\n\n\n\n");
+				channel = msg[0] & CHANNEL_MASK;
+				ret = read(STDIN_FILENO, msg, 2);
+				if (ret != 2) goto finish;
+				int bend = msg[0] | (msg[1] << 7); // bend (0x0000 to 0x3FFF (0x2000 is no bend, 0x3FFF is two semitones up))
+				
+				pitch_bend_semitones[channel] = (bend - 0x2000) / (0x1FFF * 0.5);
 			}
 			else if ((msg[0]&MSG_MASK) == SYSTEM_EXCLUSIVE) {
 				if (msg[0] == 0xF0) { // custom instrument
@@ -354,6 +371,13 @@ int main(int argc, char **argv) {
 					if (sample_times[i][j] > 0)
 						fprintf(stderr,  " %6.4f\x1b[0K", envp[i][j]);
 					//	fprintf(stderr, " %6d\x1b[0K", ampsum > 32767 ? (int)(amps[i][j] * (32767. / ampsum)) : amps[i][j]);
+			
+	//		fprintf(stderr, "\n");
+	//		fprintf(stderr, "bend: \x1b[0K");
+	//		for (int i = 0; i < CHANNEL_COUNT; ++i)
+	//			fprintf(stderr,  " %6.4f\x1b[0K", pitch_bend_semitones[i]);
+			
+	//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
 			fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A");
 	//		fprintf(stderr, "\n\x1b[A\x1b[A\x1b[A\x1b[A");
 			fflush(stderr);
