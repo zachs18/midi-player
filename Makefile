@@ -29,14 +29,17 @@ midi: midi.o percussion.so instrument.so
 #	gcc midi.o percussion.o instrument.o $(PERCUSSION_OBJS) -o midi_sine $(CFLAGS) -DSTARTING_INSTRUMENT=sine
 #	gcc midi.o percussion.o instrument.o $(PERCUSSION_OBJS) -o midi_violin $(CFLAGS) -DSTARTING_INSTRUMENT=violin
 
+midi_keyboard: midi_keyboard.c
+	gcc $(CFLAGS) `pkg-config --cflags gtk+-3.0` midi_keyboard.c `pkg-config --libs gtk+-3.0` -o midi_keyboard
+
 Debug: CFLAGS += -g
-Debug: midi ;
+Debug: midi midi_keyboard ;
 
 Release: CFLAGS += -DNO_DEBUG -O2
-Release: midi ;
+Release: midi midi_keyboard ;
 
 clean:
-	rm -f *.o *.so midi
+	rm -f *.o *.so midi midi_keyboard
 	$(MAKE) -C percussion clean
 
 .PHONY: percussion

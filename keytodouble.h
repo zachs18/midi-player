@@ -1,5 +1,5 @@
 
-int max_key = 65509;
+unsigned int max_key = 65509;
 double note_values[] = {
 	[65509] = 116.540941, // Caps_Lock
 	[65505] = 123.470825, // LShift
@@ -84,7 +84,7 @@ double note_values[] = {
 	[   93] = 1046.502261, // ]
 	[   125] = 1046.502261, // }
 	[65288] = 1108.730524, // BackSpace
-	[   92] = 1174.659072, // \
+	[   92] = 1174.659072, // backslash
 	[  124] = 1174.659072, // |
 };
 int note_midi_values[] = {
@@ -171,6 +171,6 @@ int note_midi_values[] = {
 	[   93] = 84, // ]
 	[  125] = 84, // }
 	[65288] = 85, // BackSpace
-	[   92] = 86, // \
+	[   92] = 86, // backslash
 	[  124] = 86, // |
 };
