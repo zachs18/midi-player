@@ -84,9 +84,9 @@ int main(int argc, char **argv) {
 	int (*sample_times)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*sample_times)); // for envelope
 	struct percussion *percussion_positions = calloc(NOTE_COUNT, sizeof(*percussion_positions));
 	struct instrument *current_instruments = calloc(CHANNEL_COUNT, sizeof(*current_instruments));
-	double *pitch_bend_semitones = calloc(CHANNEL_COUNT, sizeof(*pitch_bend_semitones));
+	double *pitch_bend_multiplier = calloc(CHANNEL_COUNT, sizeof(*pitch_bend_multiplier));
 	
-	if (!notes || !freqs || !amps || !envp || !sample_times || !percussion_positions || !current_instruments || !pitch_bend_semitones) {
+	if (!notes || !freqs || !amps || !envp || !sample_times || !percussion_positions || !current_instruments || !pitch_bend_multiplier) {
 		fprintf(stderr, "Memory allocation failed");
 		free(notes);
 		free(freqs);
@@ -95,13 +95,13 @@ int main(int argc, char **argv) {
 		free(sample_times);
 		free(percussion_positions);
 		free(current_instruments);
-		free(pitch_bend_semitones);
+		free(pitch_bend_multiplier);
 		exit(EXIT_FAILURE);
 	}
 	
 	for (int i = 0; i < CHANNEL_COUNT; ++i) {
 		current_instruments[i] = STARTING_INSTRUMENT;
-		pitch_bend_semitones[i] = 0.0;
+		pitch_bend_multiplier[i] = 1.0;
 	}
 	
 	current_instruments[9] = (struct instrument) {
@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
 	
 	//int sample_count = 2*RATE / freq;
 	double sample_dt = 1 / (double)RATE; // delta time
-	int sample_index = 0;
+	//int sample_index = 0;
 
 	/* Create a new playback stream */
 	if (!(s = pa_simple_new(NULL, argv[0], PA_STREAM_PLAYBACK, NULL, "playback", &ss, NULL, NULL, &error))) {
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
 							percussion_positions[i] = percussions[note];
 						}
 						else {
-							freqs[channel][i] = 440. * pow(2, (note - 69 + pitch_bend_semitones[channel]) / 12.);
+							freqs[channel][i] = 440. * pow(2, (note - 69) / 12.);
 						}
 						break;
 					}
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
 				if (ret != 2) goto finish;
 				int bend = msg[0] | (msg[1] << 7); // bend (0x0000 to 0x3FFF (0x2000 is no bend, 0x3FFF is two semitones up))
 				
-				pitch_bend_semitones[channel] = (bend - 0x2000) / (0x1FFF * 0.5);
+				pitch_bend_multiplier[channel] = pow(2, (bend - 0x2000) / (0x1FFF * 6.0));
 			}
 			else if ((msg[0]&MSG_MASK) == SYSTEM_EXCLUSIVE) {
 				if (msg[0] == 0xF0) { // custom instrument
@@ -280,7 +280,7 @@ int main(int argc, char **argv) {
 		for (int i = 0; i < CHANNEL_COUNT; ++i)
 			for (int j = 0; j < NOTE_COUNT; ++j)
 				ampsum += amps[i][j] * envp[i][j];
-		for (int i = 0; i < BUFSIZE; ++i, ++sample_index) {
+		for (int i = 0; i < BUFSIZE; ++i) {
 			double wav = 0;
 			for (int channel = 0; channel < CHANNEL_COUNT; ++channel) {
 				for (int j = 0; j < NOTE_COUNT; ++j) {
@@ -313,7 +313,7 @@ int main(int argc, char **argv) {
 						
 						double wava = 0;
 						for (int k = 0; k < current_instruments[channel].count; ++k) {
-							wava += current_instruments[channel].amplitudes[k] * sin((k+1)*2.*M_PI*sample_dt*sample_index*freqs[channel][j]);
+							wava += current_instruments[channel].amplitudes[k] * sin((k+1)*2.*M_PI*sample_dt*sample_times[channel][j]*freqs[channel][j]*pitch_bend_multiplier[channel]);
 						}
 						wava *= amps[channel][j] / current_instruments[channel].fullamplitude;
 						
@@ -353,11 +353,17 @@ int main(int argc, char **argv) {
 					if (sample_times[i][j] > 0)
 						fprintf(stderr, " (%2d,%1d)\x1b[0K", i, j);
 			fprintf(stderr, "\n");
-			fprintf(stderr, "freqs:\x1b[0K");
+//			fprintf(stderr, "freqs:\x1b[0K");
+//			for (int i = 0; i < CHANNEL_COUNT; ++i)
+//				for (int j = 0; j < NOTE_COUNT; ++j)
+//					if (sample_times[i][j] > 0)
+//						fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.1f\x1b[0K", freqs[i][j]);
+//			fprintf(stderr, "\n");
+			fprintf(stderr, "notes:\x1b[0K");
 			for (int i = 0; i < CHANNEL_COUNT; ++i)
 				for (int j = 0; j < NOTE_COUNT; ++j)
 					if (sample_times[i][j] > 0)
-						fprintf(stderr, freqs[i][j] <= 999. ? " %6.2f\x1b[0K" : " %6.1f\x1b[0K", freqs[i][j]);
+						fprintf(stderr, " %6d\x1b[0K", notes[i][j]);
 			fprintf(stderr, "\n");
 			fprintf(stderr, "amps: \x1b[0K");
 			for (int i = 0; i < CHANNEL_COUNT; ++i)
