@@ -38,6 +38,11 @@
 #include "percussion.h"
 #include "instrument.h"
 
+#ifndef M_PI
+#    define M_PI 3.14159265358979323846
+#endif
+
+
 #define BUFSIZE 128
 #define RATE 44100
 #define AMPLITUDE 32000
@@ -125,7 +130,7 @@ int main(int argc, char **argv) {
 	//int sample_index = 0;
 
 	/* Create a new playback stream */
-	if (!(s = pa_simple_new(NULL, argv[0], PA_STREAM_PLAYBACK, NULL, "playback", &ss, NULL, NULL, &error))) {
+	if (!(s = pa_simple_new(NULL, argc ? argv[0] : "midi player", PA_STREAM_PLAYBACK, NULL, "playback", &ss, NULL, NULL, &error))) {
 		fprintf(stderr, __FILE__": pa_simple_new() failed: %s\n", pa_strerror(error));
 		goto finish;
 	}

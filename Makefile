@@ -1,6 +1,6 @@
 default: Debug ;
 
-CFLAGS += -lm -lpulse -lpulse-simple -Wall -Wextra -ffast-math
+CFLAGS += -lm -lpulse -lpulse-simple -Wall -Wextra -ffast-math -std=c11
 
 HEADERS := $(wildcard *.h)
 
