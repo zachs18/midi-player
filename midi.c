@@ -82,17 +82,19 @@ int main(int argc, char **argv) {
 	int (*amps)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*amps));
 	double (*envp)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*envp));
 	int (*sample_times)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*sample_times)); // for envelope
+	int (*stop_times)[NOTE_COUNT] = calloc(CHANNEL_COUNT, sizeof(*stop_times)); // for release
 	struct percussion *percussion_positions = calloc(NOTE_COUNT, sizeof(*percussion_positions));
 	struct instrument *current_instruments = calloc(CHANNEL_COUNT, sizeof(*current_instruments));
 	double *pitch_bend_multiplier = calloc(CHANNEL_COUNT, sizeof(*pitch_bend_multiplier));
 	
-	if (!notes || !freqs || !amps || !envp || !sample_times || !percussion_positions || !current_instruments || !pitch_bend_multiplier) {
+	if (!notes || !freqs || !amps || !envp || !sample_times || !stop_times || !percussion_positions || !current_instruments || !pitch_bend_multiplier) {
 		fprintf(stderr, "Memory allocation failed");
 		free(notes);
 		free(freqs);
 		free(amps);
 		free(envp);
 		free(sample_times);
+		free(stop_times);
 		free(percussion_positions);
 		free(current_instruments);
 		free(pitch_bend_multiplier);
@@ -154,8 +156,8 @@ int main(int argc, char **argv) {
 				int i;
 				for(i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d\n", __LINE__, i, freqs[i], amps[i]);
-					if (vel == 0 && notes[channel][i] == note && sample_times[channel][i] > 0) {
-						sample_times[channel][i] = -current_instruments[channel].envelope.release;
+					if (vel == 0 && notes[channel][i] == note && sample_times[channel][i] > 0 && stop_times[channel][i] == 0) {
+						stop_times[channel][i] = sample_times[channel][i] + current_instruments[channel].envelope.release;
 						amps[channel][i] *= envp[channel][i];
 						//notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
 						break;
@@ -187,8 +189,8 @@ int main(int argc, char **argv) {
 				//int freq = 440. * pow(2, (note - 69) / 12.);
 				for(int i = 0; i < NOTE_COUNT; ++i) {
 					//fprintf(stderr, "%d: note #%d on %d at %d (trying to turn off %d)\n", __LINE__, i, freqs[i], amps[i], freq);
-					if (notes[channel][i] == note && sample_times[channel][i] > 0) {
-						sample_times[channel][i] = -current_instruments[channel].envelope.release;
+					if (notes[channel][i] == note && sample_times[channel][i] > 0 && stop_times[channel][i] == 0) {
+						stop_times[channel][i] = sample_times[channel][i] + current_instruments[channel].envelope.release;
 						amps[channel][i] *= envp[channel][i];
 						//fprintf(stderr, "%d (%d) off %d\n", note, freq, i);
 						//notes[channel][i] = freqs[channel][i] = amps[channel][i] = 0;
@@ -285,14 +287,17 @@ int main(int argc, char **argv) {
 			for (int channel = 0; channel < CHANNEL_COUNT; ++channel) {
 				for (int j = 0; j < NOTE_COUNT; ++j) {
 					if (!sample_times[channel][j]) {
-						notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+						sample_times[channel][j] = stop_times[channel][j] = 0;
+						notes[channel][j] = 0;
+						freqs[channel][j] = 0;
+						amps[channel][j] = 0;
 						continue;
 					}
 					// envelope
 					#define current_envelope current_instruments[channel].envelope
-					if (sample_times[channel][j] < 0) { // release
+					if (sample_times[channel][j] < stop_times[channel][j]) { // release
 						//envp[channel][j] = current_envelope.sustain * sample_times[channel][j] / -current_envelope.release;
-						envp[channel][j] = sample_times[channel][j] / (double) -current_envelope.release;
+						envp[channel][j] = (sample_times[channel][j] - stop_times[channel][j]) / (double) -current_envelope.release;
 						// when note is released, amps is multiplied by envp to allow smoothness even if released before sustain
 					} else if (sample_times[channel][j] <= current_envelope.attack) { // attack
 						envp[channel][j] = sample_times[channel][j] / (double)current_envelope.attack;
@@ -305,8 +310,12 @@ int main(int argc, char **argv) {
 					#undef current_envelope
 					
 					++sample_times[channel][j];
-					if (!sample_times[channel][j]) {
-						notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
+					if (sample_times[channel][j] == stop_times[channel][j]) {
+						sample_times[channel][j] = stop_times[channel][j] = 0;
+						notes[channel][j] = 0;
+						freqs[channel][j] = 0;
+						amps[channel][j] = 0;
+						continue;
 					}
 					
 					if (channel != 9) { // not percussion
@@ -329,7 +338,7 @@ int main(int argc, char **argv) {
 						if (percussion_positions[j].end - percussion_positions[j].start < 1) {
 							percussion_positions[j] = (struct percussion){NULL, NULL};
 							notes[channel][j] = freqs[channel][j] = amps[channel][j] = 0;
-							sample_times[channel][i] = -1;
+							sample_times[channel][j] = 0;
 						} else {
 							wav += (*percussion_positions[j].start * amps[channel][j] / 32768) * envp[channel][j];
 							percussion_positions[j].start += 2;
