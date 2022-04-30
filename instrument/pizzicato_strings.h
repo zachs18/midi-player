@@ -6,7 +6,7 @@ const struct instrument pizzicato_strings = {
 	1. + .7 + .3 + .4 + .4 + .2 + .4 + .1,
 	{
 		1,
-		13230, // 0.3s
+		17640.0, // 0.4s
 		0.0,
 		0,
 	},

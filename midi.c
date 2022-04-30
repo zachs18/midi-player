@@ -39,7 +39,7 @@
 #include "instrument.h"
 
 #ifndef M_PI
-#    define M_PI 3.14159265358979323846
+#	define M_PI 3.14159265358979323846
 #endif
 
 
@@ -311,6 +311,13 @@ int main(int argc, char **argv) {
 						envp[channel][j] = 1 - (1-current_envelope.sustain) * progress;
 					} else {
 						envp[channel][j] = current_envelope.sustain;
+						if (current_envelope.sustain <= 0.001) { // If sustain is zero, then end after decay. (0.01 for rounding error)
+							sample_times[channel][j] = stop_times[channel][j] = 0;
+							notes[channel][j] = 0;
+							freqs[channel][j] = 0;
+							amps[channel][j] = 0;
+							continue;
+						}
 					}
 					#undef current_envelope
 					

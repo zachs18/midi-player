@@ -12,7 +12,7 @@ struct envelope {
 
 	// attack is the time until full volume (plus 1, i.e. 1 represents 0)
 	// decay is the time from full volume until sustain volume
-	// sustain is the volume during sustain
+	// sustain is the volume during sustain. If sustain is 0.0, the note ends after decay
 	// release is the time from release to no volume
 };
 
